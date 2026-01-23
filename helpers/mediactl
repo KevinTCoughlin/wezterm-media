@@ -1,0 +1,55 @@
+#!/bin/bash
+# SPDX-License-Identifier: MIT
+# mediactl - System-wide media control via simulated media key events
+#
+# Part of wezterm-media plugin: https://github.com/KevinTCoughlin/wezterm-media
+#
+# Usage: mediactl <command>
+# Commands: togglePlayPause, play, pause, next, previous
+#
+# Works with any app that responds to media keys (Apple Music, Spotify, browsers, etc.)
+# Requirements: macOS 14+
+
+set -euo pipefail
+
+# Media key codes (NX_KEYTYPE_* from IOKit/hidsystem/ev_keymap.h)
+readonly PLAY_PAUSE_KEY=1016
+readonly NEXT_KEY=1017
+readonly PREV_KEY=1018
+
+send_media_key() {
+    local key_code="$1"
+    osascript <<EOF
+use framework "Foundation"
+use framework "AppKit"
+
+set keyCode to $key_code
+set keyDown to current application's NSEvent's otherEventWithType:14 location:{0, 0} modifierFlags:0 timestamp:0 windowNumber:0 context:(missing value) subtype:8 data1:((keyCode * 65536) + (10 * 256)) data2:-1
+set keyUp to current application's NSEvent's otherEventWithType:14 location:{0, 0} modifierFlags:0 timestamp:0 windowNumber:0 context:(missing value) subtype:8 data1:((keyCode * 65536) + (11 * 256)) data2:-1
+
+keyDown's CGEvent's post_(0)
+delay 0.05
+keyUp's CGEvent's post_(0)
+EOF
+}
+
+case "${1:-}" in
+    togglePlayPause|play|pause)
+        send_media_key "$PLAY_PAUSE_KEY"
+        ;;
+    next)
+        send_media_key "$NEXT_KEY"
+        ;;
+    previous)
+        send_media_key "$PREV_KEY"
+        ;;
+    -h|--help)
+        echo "Usage: mediactl <command>"
+        echo "Commands: togglePlayPause, play, pause, next, previous"
+        ;;
+    *)
+        echo "Usage: mediactl <command>" >&2
+        echo "Commands: togglePlayPause, play, pause, next, previous" >&2
+        exit 1
+        ;;
+esac

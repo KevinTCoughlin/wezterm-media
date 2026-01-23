@@ -1,0 +1,65 @@
+#!/usr/bin/env swift
+// SPDX-License-Identifier: MIT
+// nowplaying - Query system-wide Now Playing info via MediaRemote framework
+//
+// Part of wezterm-media plugin: https://github.com/KevinTCoughlin/wezterm-media
+//
+// Output format: title|artist|playing|bundleId (pipe-separated)
+// Returns empty string if nothing is playing
+//
+// Supported sources: Apple Music, Spotify, browsers, any app using MediaRemote
+// Requirements: macOS 14+
+
+import Foundation
+import Darwin
+
+// MARK: - MediaRemote Framework Binding
+
+guard let handle = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", RTLD_NOW) else {
+    print("")
+    exit(0)
+}
+
+typealias MRMediaRemoteGetNowPlayingInfoType = @convention(c) (
+    DispatchQueue,
+    @escaping @convention(block) (CFDictionary?) -> Void
+) -> Void
+
+guard let sym = dlsym(handle, "MRMediaRemoteGetNowPlayingInfo") else {
+    print("")
+    exit(0)
+}
+
+let MRMediaRemoteGetNowPlayingInfo = unsafeBitCast(sym, to: MRMediaRemoteGetNowPlayingInfoType.self)
+
+// MARK: - Query Now Playing
+
+var result = ""
+var completed = false
+
+MRMediaRemoteGetNowPlayingInfo(DispatchQueue.main) { cfDict in
+    defer { completed = true }
+    guard let cfDict = cfDict else { return }
+
+    let info = cfDict as! [String: Any]
+    let title = info["kMRMediaRemoteNowPlayingInfoTitle"] as? String ?? ""
+    guard !title.isEmpty else { return }
+
+    let artist = info["kMRMediaRemoteNowPlayingInfoArtist"] as? String ?? ""
+    let bundleId = info["kMRMediaRemoteNowPlayingInfoClientBundleIdentifier"] as? String ?? ""
+    let rate = info["kMRMediaRemoteNowPlayingInfoPlaybackRate"] as? Double ?? 0
+    let isPlaying = rate > 0
+
+    // Escape pipe delimiter in values
+    let safeTitle = title.replacingOccurrences(of: "|", with: "-")
+    let safeArtist = artist.replacingOccurrences(of: "|", with: "-")
+    result = "\(safeTitle)|\(safeArtist)|\(isPlaying)|\(bundleId)"
+}
+
+// Run loop with timeout
+let deadline = Date().addingTimeInterval(0.5)
+while !completed && Date() < deadline {
+    CFRunLoopRunInMode(.defaultMode, 0.01, true)
+}
+
+print(result)
