@@ -3,6 +3,7 @@
 -- SPDX-License-Identifier: MIT
 
 local wezterm = require("wezterm")
+local utils = require("shared.wezterm_utils")
 
 local M = {}
 
@@ -65,14 +66,20 @@ end
 -- Query now playing info via helper
 local function get_now_playing(helper_dir)
   local helper_path = helper_dir .. "/nowplaying"
-  local success, output = wezterm.run_child_process({ helper_path })
-  if not success or not output then return nil end
+  local success, output = utils.safe_run({ helper_path })
+  if not success or not output then 
+    return nil 
+  end
 
   local result = output:gsub("^%s*(.-)%s*$", "%1")
-  if result == "" then return nil end
+  if result == "" then 
+    return nil 
+  end
 
   local title, artist, playing, bundle_id = result:match("^([^|]*)|([^|]*)|([^|]*)|(.*)$")
-  if not title or title == "" then return nil end
+  if not title or title == "" then 
+    return nil 
+  end
 
   local is_playing = playing == "true"
   local track = artist ~= "" and (title .. " — " .. artist) or title
@@ -172,7 +179,7 @@ function M.apply_to_config(config, opts)
         key = merged.keys.play_pause,
         mods = merged.keys.mods,
         action = wezterm.action_callback(function()
-          wezterm.run_child_process({ helper_dir .. "/mediactl", "togglePlayPause" })
+          utils.safe_run({ helper_dir .. "/mediactl", "togglePlayPause" })
         end),
       })
     end
@@ -182,7 +189,7 @@ function M.apply_to_config(config, opts)
         key = merged.keys.next_track,
         mods = merged.keys.mods,
         action = wezterm.action_callback(function()
-          wezterm.run_child_process({ helper_dir .. "/mediactl", "next" })
+          utils.safe_run({ helper_dir .. "/mediactl", "next" })
         end),
       })
     end
@@ -192,7 +199,7 @@ function M.apply_to_config(config, opts)
         key = merged.keys.prev_track,
         mods = merged.keys.mods,
         action = wezterm.action_callback(function()
-          wezterm.run_child_process({ helper_dir .. "/mediactl", "previous" })
+          utils.safe_run({ helper_dir .. "/mediactl", "previous" })
         end),
       })
     end
@@ -202,7 +209,7 @@ function M.apply_to_config(config, opts)
         key = merged.keys.vol_up,
         mods = merged.keys.mods,
         action = wezterm.action_callback(function()
-          wezterm.run_child_process({
+          utils.safe_run({
             "osascript", "-e",
             "set volume output volume ((output volume of (get volume settings)) + 10)"
           })
@@ -215,7 +222,7 @@ function M.apply_to_config(config, opts)
         key = merged.keys.vol_down,
         mods = merged.keys.mods,
         action = wezterm.action_callback(function()
-          wezterm.run_child_process({
+          utils.safe_run({
             "osascript", "-e",
             "set volume output volume ((output volume of (get volume settings)) - 10)"
           })
