@@ -16,7 +16,7 @@ System-wide Now Playing status bar and media controls for [WezTerm](https://wezf
 ## Requirements
 
 - macOS 14+ (Sonoma or later)
-- Swift runtime (included with macOS)
+- Xcode Command Line Tools (`xcrun swift`/`swiftc`)
 - WezTerm terminal
 - [Nerd Font](https://www.nerdfonts.com/) for icons
 
@@ -64,7 +64,7 @@ media.apply_to_config(config, {
   -- Display settings
   scroll_speed = 3,        -- 1-5, characters to scroll per tick
   scroll_width = 35,       -- visible characters for track name
-  update_interval = 150,   -- milliseconds between updates
+  update_interval = 500,   -- milliseconds between updates (minimum: 250)
   eq_style = "wave",       -- "wave", "thin", "classic", "dots", "mini"
 
   -- Key bindings (set to false to disable)
@@ -81,7 +81,10 @@ media.apply_to_config(config, {
 
 ### Standalone Helpers
 
-The helpers can be used independently:
+The helpers can be used independently. On macOS 14 and 15, `nowplaying`
+compiles an optimized binary into `~/Library/Caches/wezterm-media` and reuses
+it. On macOS 26 and later it runs as a Swift script because unsigned compiled
+clients cannot reliably access MediaRemote there.
 
 ```bash
 # Query now playing info
@@ -124,7 +127,8 @@ This plugin uses macOS's private MediaRemote framework to:
 1. **Query Now Playing info** - The `nowplaying` helper uses `MRMediaRemoteGetNowPlayingInfo` to get currently playing track info from any app
 2. **Send media commands** - The `mediactl` helper simulates media key events (play/pause, next, previous) via CGEvent
 
-The MediaRemote framework is the same API that Control Center and the notch media widget use, ensuring compatibility with all media apps.
+MediaRemote is a private macOS framework. Apple can change it without notice,
+so compatibility cannot be guaranteed across future macOS releases.
 
 ## Troubleshooting
 
@@ -132,7 +136,10 @@ The MediaRemote framework is the same API that Control Center and the notch medi
 
 - Ensure media is actually playing (check Control Center)
 - Some apps don't register with MediaRemote until playback starts
-- The helper must be run as a script (not compiled) on macOS 26+
+- Run `xcode-select --install` if the helper reports that `xcrun`, `swift`, or
+  `swiftc` is unavailable
+- On macOS 14 or 15, remove `~/Library/Caches/wezterm-media/nowplaying` to
+  force a rebuild
 
 ### Media controls not working
 

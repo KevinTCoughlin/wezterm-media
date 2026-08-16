@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lua-and-shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: sudo apt-get update -qq && sudo apt-get install -y lua5.4 shellcheck
+      - name: Check Lua syntax
+        run: find . -name '*.lua' -print0 | xargs -0 -n1 luac -p
+      - name: Check shell helpers
+        run: |
+          shellcheck helpers/mediactl helpers/nowplaying
+          bash -n helpers/mediactl helpers/nowplaying
+      - name: Run tests
+        run: |
+          lua tests/test.lua .
+          bash tests/test-nowplaying.sh .
+          helpers/mediactl --help
+          test -z "$(helpers/nowplaying)"
+
+  swift:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Type-check helper
+        run: xcrun swiftc -typecheck helpers/nowplaying.swift
+      - name: Run helper wrapper
+        run: helpers/nowplaying >/dev/null
