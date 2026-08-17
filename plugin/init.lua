@@ -3,7 +3,9 @@
 -- SPDX-License-Identifier: MIT
 
 local wezterm = require("wezterm")
-local utils = require("plugin.lib")
+local source = debug.getinfo(1, "S").source:gsub("^@", "")
+local plugin_dir = assert(source:match("^(.*[/\\])"), "unable to determine plugin directory")
+local utils = dofile(plugin_dir .. "lib.lua")
 
 local M = {}
 
@@ -11,7 +13,7 @@ local M = {}
 local defaults = {
   scroll_speed = 3,
   scroll_width = 35,
-  update_interval = 150,
+  update_interval = 500,
   eq_style = "wave",
   keys = {
     mods = "OPT|SHIFT",
@@ -54,22 +56,51 @@ local state = {
   last_track = "",
   eq_frame = 1,
 }
+local warned_unsupported = false
+local helper_error_reported = false
 
 -- Get plugin directory
 local function get_plugin_dir()
-  -- When loaded via wezterm.plugin.require, this file is at plugin/init.lua
-  local info = debug.getinfo(1, "S")
-  local path = info.source:match("@?(.*)")
-  return path:match("(.*/)")  .. "../helpers"
+  return plugin_dir .. "../helpers"
+end
+
+local function is_macos()
+  return type(wezterm.target_triple) == "string"
+    and wezterm.target_triple:find("apple%-darwin") ~= nil
+end
+
+local function utf8_len(value)
+  local _, count = value:gsub("[^\128-\191]", "")
+  return count
+end
+
+local function utf8_sub(value, first, last)
+  local start_byte = utf8.offset(value, first)
+  if not start_byte then return "" end
+  local end_byte = utf8.offset(value, last + 1)
+  return value:sub(start_byte, end_byte and (end_byte - 1) or -1)
 end
 
 -- Query now playing info via helper
 local function get_now_playing(helper_dir)
+  if not is_macos() then
+    if not warned_unsupported then
+      wezterm.log_error("wezterm-media is only supported on macOS")
+      warned_unsupported = true
+    end
+    return nil
+  end
+
   local helper_path = helper_dir .. "/nowplaying"
-  local success, output = utils.safe_run({ helper_path })
+  local success, output, stderr = utils.safe_run({ helper_path })
   if not success or not output then 
+    if not helper_error_reported and stderr and stderr ~= "" then
+      wezterm.log_error("nowplaying helper failed: " .. stderr)
+      helper_error_reported = true
+    end
     return nil 
   end
+  helper_error_reported = false
 
   local result = output:gsub("^%s*(.-)%s*$", "%1")
   if result == "" then 
@@ -89,6 +120,13 @@ end
 -- Get icon for app
 local function get_app_icon(bundle_id)
   return app_icons[bundle_id] or default_icon
+end
+
+local function run_command(command, label)
+  local ok, _, err = utils.safe_run(command)
+  if not ok then
+    wezterm.log_error(label .. " failed: " .. (err or "unknown error"))
+  end
 end
 
 -- Build status bar elements
@@ -115,11 +153,13 @@ function M.get_status_elements(opts)
 
   -- Scrolling marquee
   local display = track
-  if #track > config.scroll_width then
-    local padding = "  ·  "
+  local track_length = utf8_len(track)
+  local padding = "  ·  "
+  if track_length > config.scroll_width then
     local scroll = track .. padding .. track
-    display = scroll:sub(state.position + 1, state.position + config.scroll_width)
-    state.position = (state.position + config.scroll_speed) % (#track + #padding)
+    display = utf8_sub(scroll, state.position + 1, state.position + config.scroll_width)
+    state.position = (state.position + config.scroll_speed)
+      % (track_length + utf8_len(padding))
   end
 
   -- Animate equalizer
@@ -144,6 +184,9 @@ function M.apply_to_config(config, opts)
   local merged = {}
   for k, v in pairs(defaults) do merged[k] = v end
   for k, v in pairs(opts) do merged[k] = v end
+  merged.update_interval = math.max(250, tonumber(merged.update_interval) or defaults.update_interval)
+  merged.scroll_width = math.max(1, math.floor(tonumber(merged.scroll_width) or defaults.scroll_width))
+  merged.scroll_speed = math.max(1, math.floor(tonumber(merged.scroll_speed) or defaults.scroll_speed))
 
   -- Merge key config
   if opts.keys ~= false then
@@ -154,7 +197,7 @@ function M.apply_to_config(config, opts)
     end
   end
 
-  local helper_dir = get_plugin_dir()
+  local helper_dir = opts.helper_dir or get_plugin_dir()
 
   -- Set status update interval
   config.status_update_interval = merged.update_interval
@@ -165,9 +208,7 @@ function M.apply_to_config(config, opts)
       helper_dir = helper_dir,
       config = merged,
     })
-    if #elements > 0 then
-      window:set_right_status(wezterm.format(elements))
-    end
+    window:set_right_status(#elements > 0 and wezterm.format(elements) or "")
   end)
 
   -- Add key bindings
@@ -179,7 +220,7 @@ function M.apply_to_config(config, opts)
         key = merged.keys.play_pause,
         mods = merged.keys.mods,
         action = wezterm.action_callback(function()
-          utils.safe_run({ helper_dir .. "/mediactl", "togglePlayPause" })
+          run_command({ helper_dir .. "/mediactl", "togglePlayPause" }, "play/pause")
         end),
       })
     end
@@ -189,7 +230,7 @@ function M.apply_to_config(config, opts)
         key = merged.keys.next_track,
         mods = merged.keys.mods,
         action = wezterm.action_callback(function()
-          utils.safe_run({ helper_dir .. "/mediactl", "next" })
+          run_command({ helper_dir .. "/mediactl", "next" }, "next track")
         end),
       })
     end
@@ -199,7 +240,7 @@ function M.apply_to_config(config, opts)
         key = merged.keys.prev_track,
         mods = merged.keys.mods,
         action = wezterm.action_callback(function()
-          utils.safe_run({ helper_dir .. "/mediactl", "previous" })
+          run_command({ helper_dir .. "/mediactl", "previous" }, "previous track")
         end),
       })
     end
@@ -209,10 +250,10 @@ function M.apply_to_config(config, opts)
         key = merged.keys.vol_up,
         mods = merged.keys.mods,
         action = wezterm.action_callback(function()
-          utils.safe_run({
+          run_command({
             "osascript", "-e",
             "set volume output volume ((output volume of (get volume settings)) + 10)"
-          })
+          }, "volume up")
         end),
       })
     end
@@ -222,10 +263,10 @@ function M.apply_to_config(config, opts)
         key = merged.keys.vol_down,
         mods = merged.keys.mods,
         action = wezterm.action_callback(function()
-          utils.safe_run({
+          run_command({
             "osascript", "-e",
             "set volume output volume ((output volume of (get volume settings)) - 10)"
-          })
+          }, "volume down")
         end),
       })
     end

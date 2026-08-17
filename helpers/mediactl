@@ -5,7 +5,7 @@
 # Part of wezterm-media plugin: https://github.com/KevinTCoughlin/wezterm-media
 #
 # Usage: mediactl <command>
-# Commands: togglePlayPause, play, pause, next, previous
+# Commands: togglePlayPause, next, previous
 #
 # Works with any app that responds to media keys (Apple Music, Spotify, browsers, etc.)
 # Requirements: macOS 14+
@@ -34,7 +34,7 @@ EOF
 }
 
 case "${1:-}" in
-    togglePlayPause|play|pause)
+    togglePlayPause)
         send_media_key "$PLAY_PAUSE_KEY"
         ;;
     next)
@@ -45,11 +45,11 @@ case "${1:-}" in
         ;;
     -h|--help)
         echo "Usage: mediactl <command>"
-        echo "Commands: togglePlayPause, play, pause, next, previous"
+        echo "Commands: togglePlayPause, next, previous"
         ;;
     *)
         echo "Usage: mediactl <command>" >&2
-        echo "Commands: togglePlayPause, play, pause, next, previous" >&2
+        echo "Commands: togglePlayPause, next, previous" >&2
         exit 1
         ;;
 esac
