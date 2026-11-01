@@ -11,7 +11,7 @@ jobs:
   lua-and-shell:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install tools
         run: sudo apt-get update -qq && sudo apt-get install -y lua5.4 shellcheck
       - name: Check Lua syntax
@@ -30,7 +30,7 @@ jobs:
   swift:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Type-check helper
         run: xcrun swiftc -typecheck helpers/nowplaying.swift
       - name: Run helper wrapper
