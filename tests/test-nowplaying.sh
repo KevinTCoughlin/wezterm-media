@@ -23,7 +23,8 @@ cat >"$WORK/bin/xcrun" <<EOF
 set -euo pipefail
 echo "\$1" >>"$WORK/xcrun.log"
 if [[ "\$1" == "swift" ]]; then
-    echo interpreted
+    shift 2
+    echo "interpreted\${*:+ \$*}"
     exit 0
 fi
 shift
@@ -37,7 +38,7 @@ while (( \$# )); do
 done
 cat >"\$output" <<'SCRIPT'
 #!/bin/bash
-echo compiled
+echo "compiled\${*:+ \$*}"
 SCRIPT
 chmod +x "\$output"
 EOF
@@ -65,3 +66,17 @@ result="$(
 )"
 [[ "$result" == "compiled" ]]
 [[ ! -s "$WORK/xcrun.log" ]]
+
+# Arguments (watch mode) reach the helper on both paths.
+result="$(
+  env -u XDG_CACHE_HOME TEST_MACOS_VERSION=26.0 HOME="$WORK/home" PATH="$WORK/bin:$PATH" \
+    "$ROOT/helpers/nowplaying" --watch out hb 1
+)"
+[[ "$result" == "interpreted --watch out hb 1" ]]
+[[ -d "$WORK/home/Library/Caches/wezterm-media" ]]
+
+result="$(
+  env -u XDG_CACHE_HOME TEST_MACOS_VERSION=15.6 HOME="$WORK/home" PATH="$WORK/bin:$PATH" \
+    "$ROOT/helpers/nowplaying" --watch out hb 1
+)"
+[[ "$result" == "compiled --watch out hb 1" ]]
