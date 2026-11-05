@@ -35,3 +35,21 @@ jobs:
         run: xcrun swiftc -typecheck helpers/nowplaying.swift
       - name: Run helper wrapper
         run: helpers/nowplaying >/dev/null
+      - name: Run watch mode
+        run: |
+          dir="$(mktemp -d)"
+          touch "$dir/hb"
+          helpers/nowplaying --watch "$dir/out" "$dir/hb" 0.25 &
+          pid=$!
+          for _ in $(seq 1 120); do [[ -s "$dir/out" ]] && break; sleep 0.5; done
+          head -1 "$dir/out" | grep -Eq '^[0-9]+$'
+          # A second watcher must exit right away (lock held).
+          helpers/nowplaying --watch "$dir/out" "$dir/hb" 0.25 &
+          second=$!
+          for _ in $(seq 1 60); do kill -0 "$second" 2>/dev/null || break; sleep 0.5; done
+          if kill -0 "$second" 2>/dev/null; then echo "second watcher did not exit"; exit 1; fi
+          # Stale heartbeat: the watcher exits and removes its output.
+          touch -t 200001010000 "$dir/hb"
+          for _ in $(seq 1 20); do kill -0 "$pid" 2>/dev/null || break; sleep 0.5; done
+          if kill -0 "$pid" 2>/dev/null; then echo "watcher ignored stale heartbeat"; exit 1; fi
+          if [[ -e "$dir/out" ]]; then echo "watcher left its output behind"; exit 1; fi

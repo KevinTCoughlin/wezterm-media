@@ -1,6 +1,7 @@
 #!/bin/bash
 # SPDX-License-Identifier: MIT
 # Runs the Swift helper in a MediaRemote-compatible mode.
+# All arguments (e.g. --watch OUTPUT HEARTBEAT INTERVAL) are passed through.
 
 set -euo pipefail
 
@@ -18,22 +19,23 @@ if [[ ! "$macos_major" =~ ^[0-9]+$ ]]; then
     exit 1
 fi
 
-# macOS 26 restricts unsigned compiled clients from reading MediaRemote.
-if (( macos_major >= 26 )); then
-    exec xcrun swift "$SOURCE"
-fi
-
 if [[ -z "${HOME:-}" ]]; then
     echo "nowplaying: HOME is not set" >&2
     exit 1
 fi
 
+# The plugin reads watch-mode output from here, so create it on every version.
 readonly CACHE_ROOT="${XDG_CACHE_HOME:-$HOME/Library/Caches}/wezterm-media"
 readonly BINARY="$CACHE_ROOT/nowplaying"
 
 umask 077
 mkdir -p "$CACHE_ROOT"
 chmod 700 "$CACHE_ROOT"
+
+# macOS 26 restricts unsigned compiled clients from reading MediaRemote.
+if (( macos_major >= 26 )); then
+    exec xcrun swift "$SOURCE" "$@"
+fi
 
 if [[ ! -x "$BINARY" || "$SOURCE" -nt "$BINARY" ]]; then
     candidate="$CACHE_ROOT/nowplaying.$$"
@@ -43,4 +45,4 @@ if [[ ! -x "$BINARY" || "$SOURCE" -nt "$BINARY" ]]; then
     trap - EXIT
 fi
 
-exec "$BINARY"
+exec "$BINARY" "$@"

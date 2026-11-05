@@ -13,9 +13,9 @@
 set -euo pipefail
 
 # Media key codes (NX_KEYTYPE_* from IOKit/hidsystem/ev_keymap.h)
-readonly PLAY_PAUSE_KEY=1016
-readonly NEXT_KEY=1017
-readonly PREV_KEY=1018
+readonly PLAY_PAUSE_KEY=16
+readonly NEXT_KEY=17
+readonly PREV_KEY=18
 
 send_media_key() {
     local key_code="$1"
