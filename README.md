@@ -2,8 +2,6 @@
 
 System-wide Now Playing status bar and media controls for [WezTerm](https://wezfurlong.org/wezterm/) on macOS.
 
-![Demo](https://github.com/KevinTCoughlin/wezterm-media/raw/main/demo.gif)
-
 ## Features
 
 - **Now Playing display** in WezTerm status bar with animated equalizer
